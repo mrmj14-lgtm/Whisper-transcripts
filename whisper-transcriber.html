@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Whisper Transcriber</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f0f0f; --surface: #1a1a1a; --border: #2e2e2e;
+    --accent: #7c6aff; --accent-dim: #7c6aff22;
+    --text: #e8e8e8; --muted: #666; --green: #4ade80; --red: #f87171;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'IBM Plex Sans', sans-serif; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 40px 20px; }
+  header { text-align: center; margin-bottom: 40px; }
+  header h1 { font-family: 'IBM Plex Mono', monospace; font-size: 1.6rem; font-weight: 600; }
+  header h1 span { color: var(--accent); }
+  header p { margin-top: 8px; color: var(--muted); font-size: 0.9rem; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px; width: 100%; max-width: 640px; margin-bottom: 20px; }
+  .card-title { font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 16px; }
+  .key-row { display: flex; gap: 10px; }
+  input[type="password"], input[type="text"] { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 0.85rem; outline: none; }
+  input:focus { border-color: var(--accent); }
+  .toggle-btn { background: none; border: 1px solid var(--border); border-radius: 8px; color: var(--muted); padding: 10px 14px; cursor: pointer; font-size: 0.8rem; }
+  .toggle-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .key-hint { margin-top: 10px; font-size: 0.78rem; color: var(--muted); }
+  .key-hint a { color: var(--accent); text-decoration: none; }
+  select { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; color: var(--text); font-size: 0.9rem; outline: none; cursor: pointer; }
+  .dropzone { border: 2px dashed var(--border); border-radius: 10px; padding: 36px 20px; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; }
+  .dropzone:hover { border-color: var(--accent); background: var(--accent-dim); }
+  .dropzone.has-file { border-color: var(--green); background: #4ade8011; }
+  .drop-icon { font-size: 2.2rem; margin-bottom: 12px; }
+  .drop-label { font-size: 0.95rem; margin-bottom: 4px; }
+  .drop-sub { font-size: 0.8rem; color: var(--muted); }
+  .file-selected { margin-top: 14px; padding: 10px 14px; background: #4ade8022; border: 1px solid var(--green); border-radius: 8px; font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; color: var(--green); display: none; word-break: break-all; }
+  .btn { width: 100%; padding: 14px; background: var(--accent); color: #fff; border: none; border-radius: 10px; font-size: 1rem; font-weight: 500; cursor: pointer; margin-top: 16px; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .progress-wrap { display: none; margin-top: 14px; }
+  .progress-bar-bg { background: var(--border); border-radius: 99px; height: 4px; overflow: hidden; }
+  .progress-bar-fill { height: 100%; background: var(--accent); border-radius: 99px; width: 0%; transition: width 0.4s; }
+  .progress-label { font-size: 0.8rem; color: var(--muted); margin-top: 8px; font-family: 'IBM Plex Mono', monospace; }
+  .result-box { display: none; }
+  .result-text { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px; font-size: 0.95rem; line-height: 1.85; white-space: pre-wrap; word-break: break-word; max-height: 400px; overflow-y: auto; direction: rtl; text-align: right; }
+  .result-actions { display: flex; gap: 10px; margin-top: 14px; }
+  .btn-outline { flex: 1; padding: 10px; background: none; border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 0.9rem; cursor: pointer; }
+  .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+  .status-msg { font-size: 0.82rem; padding: 10px 14px; border-radius: 8px; margin-top: 12px; display: none; font-family: 'IBM Plex Mono', monospace; }
+  .status-msg.error { background: #f8717122; border: 1px solid var(--red); color: var(--red); }
+  .status-msg.success { background: #4ade8022; border: 1px solid var(--green); color: var(--green); }
+  .info-box { background: #7c6aff11; border: 1px solid #7c6aff44; border-radius: 8px; padding: 14px 16px; font-size: 0.85rem; color: #aaa; line-height: 1.7; }
+  .info-box strong { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🎙 Whisper <span>Transcriber</span></h1>
+  <p>Powered by OpenAI Whisper — supports Farsi, English, and 95+ languages</p>
+</header>
+
+<div class="card">
+  <div class="card-title">⚠️ Important</div>
+  <div class="info-box">
+    <strong>Upload your file directly from your computer or phone.</strong><br>
+    Do not drag from Claude — click the upload area and browse to the file on your device.<br><br>
+    Your audio goes directly to OpenAI Whisper. It is never stored here.
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">Step 1 — OpenAI API Key</div>
+  <div class="key-row">
+    <input type="password" id="apiKey" placeholder="sk-..." autocomplete="off">
+    <button class="toggle-btn" id="toggleBtn" onclick="toggleKey()">Show</button>
+  </div>
+  <div class="key-hint">
+    Get a free key at <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com/api-keys</a> — costs ~$0.006/min
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">Step 2 — Audio Language</div>
+  <select id="language">
+    <option value="fa">Persian / Farsi (فارسی)</option>
+    <option value="en">English</option>
+    <option value="ar">Arabic (عربي)</option>
+    <option value="tr">Turkish</option>
+    <option value="de">German</option>
+    <option value="fr">French</option>
+    <option value="es">Spanish</option>
+    <option value="ru">Russian</option>
+    <option value="zh">Chinese</option>
+    <option value="">Auto-detect</option>
+  </select>
+</div>
+
+<div class="card">
+  <div class="card-title">Step 3 — Choose Audio File From Your Device</div>
+  <div class="dropzone" id="dropzone" onclick="document.getElementById('fileInput').click()">
+    <div class="drop-icon">🎧</div>
+    <div class="drop-label">Click here to browse your files</div>
+    <div class="drop-sub">.m4a · .mp3 · .wav · .ogg · .webm — max 25 MB</div>
+  </div>
+  <input type="file" id="fileInput" accept="audio/*,.m4a,.mp3,.wav,.ogg,.webm,.mp4" style="display:none" onchange="onFileChange(event)">
+  <div class="file-selected" id="fileSelected"></div>
+  <div class="status-msg" id="statusMsg"></div>
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill"></div></div>
+    <div class="progress-label" id="progressLabel">Uploading…</div>
+  </div>
+  <button class="btn" id="transcribeBtn" onclick="transcribe()" disabled>Transcribe</button>
+</div>
+
+<div class="card result-box" id="resultBox">
+  <div class="card-title">Transcription Result</div>
+  <div class="result-text" id="resultText"></div>
+  <div class="result-actions">
+    <button class="btn-outline" onclick="copyText()">📋 Copy</button>
+    <button class="btn-outline" onclick="downloadText()">⬇️ Download .txt</button>
+  </div>
+</div>
+
+<script>
+  let selectedFile = null;
+
+  function toggleKey() {
+    const input = document.getElementById('apiKey');
+    const btn = document.getElementById('toggleBtn');
+    if (input.type === 'password') { input.type = 'text'; btn.textContent = 'Hide'; }
+    else { input.type = 'password'; btn.textContent = 'Show'; }
+  }
+
+  function onFileChange(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 25 * 1024 * 1024) {
+      showStatus('File too large — max 25 MB for Whisper.', 'error');
+      return;
+    }
+    selectedFile = file;
+    document.getElementById('fileSelected').style.display = 'block';
+    document.getElementById('fileSelected').textContent = '✓ ' + file.name + ' (' + (file.size/1024/1024).toFixed(2) + ' MB)';
+    document.getElementById('dropzone').classList.add('has-file');
+    document.getElementById('transcribeBtn').disabled = false;
+    hideStatus();
+  }
+
+  function showStatus(msg, type) {
+    var el = document.getElementById('statusMsg');
+    el.textContent = msg; el.className = 'status-msg ' + type; el.style.display = 'block';
+  }
+  function hideStatus() { document.getElementById('statusMsg').style.display = 'none'; }
+
+  function setProgress(pct, label) {
+    document.getElementById('progressWrap').style.display = 'block';
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressLabel').textContent = label;
+  }
+  function hideProgress() { document.getElementById('progressWrap').style.display = 'none'; }
+
+  async function transcribe() {
+    var apiKey = document.getElementById('apiKey').value.trim();
+    var language = document.getElementById('language').value;
+    if (!apiKey) { showStatus('Please enter your OpenAI API key.', 'error'); return; }
+    if (!selectedFile) { showStatus('Please select a file first.', 'error'); return; }
+
+    var btn = document.getElementById('transcribeBtn');
+    btn.disabled = true; btn.textContent = 'Transcribing…';
+    hideStatus();
+    document.getElementById('resultBox').style.display = 'none';
+    setProgress(30, 'Uploading audio to Whisper…');
+
+    try {
+      var formData = new FormData();
+      formData.append('file', selectedFile, selectedFile.name);
+      formData.append('model', 'whisper-1');
+      if (language) formData.append('language', language);
+      formData.append('response_format', 'text');
+
+      setProgress(60, 'Whisper is transcribing… (may take a minute for long files)');
+
+      var response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + apiKey },
+        body: formData
+      });
+
+      setProgress(90, 'Almost done…');
+
+      if (!response.ok) {
+        var err = await response.json().catch(function() { return {}; });
+        throw new Error((err.error && err.error.message) || ('API error ' + response.status));
+      }
+
+      var text = await response.text();
+      setProgress(100, 'Done!');
+
+      setTimeout(function() {
+        hideProgress();
+        document.getElementById('resultText').textContent = text;
+        document.getElementById('resultBox').style.display = 'block';
+        document.getElementById('resultBox').scrollIntoView({ behavior: 'smooth' });
+        showStatus('Transcription complete!', 'success');
+      }, 400);
+
+    } catch(err) {
+      hideProgress();
+      showStatus('Error: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Transcribe';
+    }
+  }
+
+  function copyText() {
+    navigator.clipboard.writeText(document.getElementById('resultText').textContent)
+      .then(function() { showStatus('Copied to clipboard!', 'success'); });
+  }
+
+  function downloadText() {
+    var text = document.getElementById('resultText').textContent;
+    var blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = (selectedFile ? selectedFile.name.replace(/\.[^.]+$/, '') : 'transcript') + '.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+</script>
+</body>
+</html>
